@@ -1,0 +1,21 @@
+graph TD
+    A[Start Session] --> B{Greeting}
+    B --> C[Enter Party Size]
+    C --> D{Valid?}
+    D -- Yes --> E[Enter Date]
+    D -- No --> C
+    E --> F{Valid?}
+    F -- Yes --> G[Enter Time]
+    F -- No --> E
+    G --> H{Valid?}
+    H -- Yes --> I[Enter Name]
+    H -- No --> G
+    I --> J{Valid?}
+    J -- Yes --> K[Enter Phone]
+    J -- No --> I
+    K --> L{Valid?}
+    L -- Yes --> M[Confirm Details]
+    L -- No --> K
+    M --> N{Confirmed?}
+    N -- Yes --> O[Complete]
+    N -- No --> C
