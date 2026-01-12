@@ -57,6 +57,9 @@ Each reservation session gets a unique identifier stored in a SQLite database. T
 └─────────────┘         └──────────────┘         └─────────────┘
 ```
 
+![Initial State](screenshots/initial-state.png)
+*The initial reservation screen showing task progress, confidence indicator, and contextual input field*
+
 ---
 
 ## Design Trade-Off #1: The 120-Character Constraint
@@ -106,6 +109,9 @@ You correct just the date field. Simple. Predictable.
 
 **Trade-Off**: Users can't say "book a table for 4 on Saturday at 7pm" all at once. They must follow the step-by-step flow. But in exchange, they get **100% accuracy** with zero ambiguity.
 
+![Confirmation Screen](screenshots/confirm.png)
+*Confirmation screen showing all collected reservation details before final submission*
+
 ---
 
 ## The Confidence Score: Making Uncertainty Visible
@@ -120,6 +126,9 @@ One of my favorite features is the **confidence indicator**. The agent assigns a
 In traditional chatbots, the system might silently fail or pretend to understand when it doesn't. Here, uncertainty is **visible**. If you see red, you know to re-check your input.
 
 This builds trust. Users aren't left wondering "Did it understand me?" They have immediate visual feedback.
+
+![Low Confidence State](screenshots/low-confidence.png)
+*Low confidence indicator (red) when user enters invalid date, with agent requesting clarification*
 
 ---
 
@@ -173,6 +182,9 @@ The UI constraints aren't limitations—they're the **architecture** that makes 
 4. **Character limits force clarity**: A 120-char constraint eliminates verbose responses and forces you to design better prompts.
 
 5. **Recovery > Prevention**: Users will make mistakes. Design for graceful error correction without restarting tasks.
+
+![Completed State](screenshots/completed.png)
+*Success screen with 100% progress and confirmation message*
 
 ---
 
