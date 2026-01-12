@@ -82,11 +82,76 @@ cd frontend && ./start.sh
 
 ### Testing the Application
 
-1. Open your browser to `http://localhost:3000`
-2. Click "Start Reservation" to begin
-3. Follow the step-by-step guided flow
-4. Try entering invalid data (e.g., `2026-02-30`) to see error recovery
-5. Observe the confidence indicator and progress tracker
+#### ▶️ Let's Test the Full Flow
+Follow these steps to see all features in action:
+
+**1. Enter Party Size**
+- Type: `4` → Click Submit
+- ✅ Should move to "Date" step
+- Progress bar advances to ~12%
+
+**2. Test Error Recovery (Low Confidence)**
+- At Date step, enter: `2026-02-30` (invalid date)
+- Click Submit
+- 🔴 Observe:
+  - Confidence changes from "High" → "Low" (red indicator)
+  - Agent message: "What date? (YYYY-MM-DD) [?] Sure?"
+  - Progress bar stays at ~12%
+- Now correct it: enter `2026-06-15`
+- ✅ Confidence recovers → moves to "Time"
+
+**3. Complete the Booking**
+- Time: `18:20`
+- Name: `Rito Chabalala`
+- Phone: `0712345678`
+- On confirmation screen → click ✅ Confirm
+
+**4. See Completion Screen**
+- Message: "Reservation confirmed! See you soon."
+- Progress bar at 100%
+- All steps turn green
+
+## Design Decisions
+
+### Architecture: Django REST + React
+**Decision**: Separate backend API (Django) from frontend UI (React)  
+**Rationale**: 
+- Clear separation between agent logic (Django state machine) and UI constraints (React components)
+- Backend enforces business rules independently of UI
+- Enables testing agent logic without frontend dependency
+- RESTful API makes system extensible (could add mobile app later)
+
+### State Machine Over Free-Form Chat
+**Decision**: Explicit step-by-step state machine (`greeting → party_size → date → time → name → phone → confirmation`)  
+**Rationale**:
+- Predictable flow ensures all required fields are collected
+- Each step has specific validation rules (no ambiguous parsing needed)
+- State transitions are deterministic (no context inference required)
+- Failures are isolated to specific steps (user corrects only the problematic field)
+
+### 120-Character Constraint
+**Decision**: Hard limit on agent responses enforced at generation time  
+**Rationale**:
+- Forces clarity and conciseness (no verbose explanations)
+- Mobile-friendly (fits small screens without scrolling)
+- Cognitive load reduction (users process information faster)
+- Prevents hallucination creep (no room for off-topic content)
+
+### UUID-Based Session Persistence
+**Decision**: Each session gets unique ID, state stored in database  
+**Rationale**:
+- Enables recovery from browser refresh or network interruption
+- Partial completion preserved (user doesn't restart from scratch)
+- Allows async processing (backend can validate while frontend waits)
+- Session can be resumed across devices (same UUID)
+
+### Confidence-Driven UI Feedback
+**Decision**: Confidence score (0.0-1.0) determines visual indicator color  
+**Rationale**:
+- Makes uncertainty visible (user knows when to double-check input)
+- Prevents silent failures (low confidence = immediate feedback)
+- Builds trust (system admits when unsure rather than faking certainty)
+- Guides user corrections (red indicator = check this field)
 
 ## UI vs Agent vs Memory State Model
 
@@ -110,70 +175,20 @@ cd frontend && ./start.sh
 - Persists state via UUID session ID
 - Recovers gracefully from errors without restart
 
-## Failure Scenario and Recovery
+## Failure Scenario
+When user enters invalid date (e.g., `2026-02-30`):
+- Agent detects error
+- Confidence drops to "Low"
+- Task stays on Date step
+- User corrects input → task resumes
+- Previously entered data (party size) preserved
 
-### Scenario 1: Invalid Date Entry
-
-**Failure**: User enters invalid date (`2026-02-30`)
-
-**System Response**:
-1. Agent detects invalid date via business logic validation
-2. Confidence drops to 0.4 → UI shows "Low" (orange/red indicator)
-3. Response: `"What date? (YYYY-MM-DD) [?] Sure?"` (118 chars)
-4. Task remains on "Date" step — **no forward progression**
-5. Progress percentage unchanged (e.g., stays at 40%)
-
-**Recovery Mechanism**:
-- User corrects to valid date `2026-06-15`
-- Agent validates and accepts input
-- Confidence rises to 0.85 → UI shows "Medium" (yellow indicator)
-- Task advances to "Time" step
-- **Previously entered data preserved** (party size, name, etc.)
-- No task restart required — graceful correction
-
-**Key Recovery Features**:
-- **Session persistence**: UUID-based session stores partial state in database
-- **Step isolation**: Error in one field doesn't invalidate others
-- **Visual feedback**: Confidence indicator immediately shows uncertainty
-- **Constrained retry**: UI only allows correcting the problematic field
-
-## Why Plain Text Chat Would Break This System
-
-### 1. **Ambiguous Input Parsing**
-**UI-Constrained**: User selects date with a date picker → guaranteed valid format  
-**Plain Text**: User types "next Tuesday" or "March 5th" → requires NLP + timezone inference  
-**Failure Point**: Parsing "next Tuesday" when today is Sunday vs. Monday gives different results
-
-### 2. **No Input Validation Guarantees**
-**UI-Constrained**: Party size is a number input (min: 1, max: 20) → invalid entries rejected at input level  
-**Plain Text**: User says "a big group" or "like 25 people maybe" → ambiguous/out-of-range values need error handling  
-**Failure Point**: System must handle typos, approximations, and edge cases
-
-### 3. **Complex Error Correction**
-**UI-Constrained**: User clicks back to "Date" field, changes value, clicks next → precise correction  
-**Plain Text**: User says "Actually change the date to next Friday" → must parse intent, identify field, update state  
-**Failure Point**: "Change Friday to Saturday" — which Friday? The previous input or a new one?
-
-### 4. **State Management Complexity**
-**UI-Constrained**: State machine with explicit steps (greeting → party_size → date → time → confirm)  
-**Plain Text**: User jumps around ("7pm on Friday for 4 people, no wait, make it 6") → must track context across turns  
-**Failure Point**: Multi-turn corrections create cascading context management issues
-
-### 5. **Invisible Confidence/Progress**
-**UI-Constrained**: Visual indicators show progress bar (60%), confidence level (Medium), current step (Time)  
-**Plain Text**: No spatial UI elements → confidence must be communicated verbally, adding to 120-char limit  
-**Failure Point**: "I'm 60% confident about your Saturday 7pm reservation for 6 — still confirming time" (82 chars just for metadata)
-
-### 6. **Task Drift Prevention**
-**UI-Constrained**: Only shows reservation-related inputs → impossible to ask off-topic questions  
-**Plain Text**: User can type "Do you have vegan options?" or "What's your cancellation policy?"  
-**Failure Point**: Agent must either handle scope creep or refuse, degrading UX
-
-### 7. **Character Limit Conflicts**
-**UI-Constrained**: Agent response + UI elements are separate → response can be terse ("Invalid date format")  
-**Plain Text**: Must repeat context each turn: "For your party of 6 on Feb 30 (invalid) at 7pm, please re-enter date" (82 chars before instruction)
-
-**Conclusion**: The UI constraints are not limitations — they're the **architecture** that makes the system robust, predictable, and user-friendly. Plain text chat would require 10x more complex NLP, error handling, and state management.
+## Why Plain Text Chat Fails
+- **No structured validation**: Ambiguous inputs like "a big group" or "next Tuesday"
+- **Complex corrections**: "Actually, make it June 15" requires parsing intent and context
+- **Hidden uncertainty**: Can't show visual confidence indicators
+- **Task drift**: Users can ask off-topic questions ("Do you have vegan options?")
+- **Character limit conflicts**: Must repeat context verbally within 120 chars
 
 ## Project Structure
 
@@ -202,6 +217,12 @@ ui-constrained-agent/
 │           ├── AgentResponse.js        # 120-char response display
 │           ├── ConfidenceIndicator.js  # Visual confidence meter
 │           └── TaskProgress.js         # Step progression UI
+├── screenshots/               # UI screenshots
+│   ├── initial-state.png      # Starting screen
+│   ├── low-confidence.png     # Error recovery state
+│   ├── confirm.png            # Confirmation screen
+│   └── completed.png          # Success screen
+├── interaction-diagram.mmd    # Mermaid interaction flow diagram
 └── README.md                  # This file
 ```
 
