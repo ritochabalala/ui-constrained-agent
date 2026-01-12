@@ -19,7 +19,8 @@ const AgentResponse = ({ message, confidence }) => {
                 alignItems: 'flex-start',
                 marginBottom: '0.5rem'
             }}>
-                <strong style={{ color: '#2c3e50', fontSize: '1.1rem' }}>🤖 Agent:</strong>
+                {/* <strong style={{ color: '#2c3e50', fontSize: '1.1rem' }}>🤖 Agent: </strong> */}
+                <strong style={{ color: '#2c3e50', fontSize: '1.1rem' }}>🤖 Welcome! Let's book your table: </strong>
                 <ConfidenceIndicator confidence={confidence} />
             </div>
             <p style={{

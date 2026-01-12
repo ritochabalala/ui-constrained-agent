@@ -13,7 +13,13 @@ import uuid
 def start_session(request):
     session = ReservationSession.objects.create()
     serializer = ReservationSessionSerializer(session)
-    return Response(serializer.data)
+    # Return initial greeting with 120 char limit
+    # greeting = "Welcome! Let's book your table."[:120]
+    greeting = "What's your seating preference? e.g Window Seat, Bar, Patio, Quiet, High-top, No Preference"[:120]
+    return Response({
+        'session': serializer.data,
+        'agent_response': greeting
+    })
 
 @api_view(['POST'])
 def handle_input(request, session_id):
@@ -24,6 +30,20 @@ def handle_input(request, session_id):
     
     user_input = request.data.get('input', '').strip()
     field = request.data.get('field', '')
+    
+    # Validate user input doesn't exceed 120 characters
+    if len(user_input) > 120:
+        session.confidence = 0.2
+        session.save()
+        agent_response = "Input too long! Max 120 characters."
+        serializer = ReservationSessionSerializer(session)
+        return Response({
+            'session': serializer.data,
+            'agent_response': agent_response
+        })
+    
+    # Store the previous step in case we need to rollback
+    previous_step = session.current_step
     
     # State machine logic
     if session.current_step == 'greeting':
@@ -88,9 +108,7 @@ def handle_input(request, session_id):
             session.current_step = 'party_size'
             session.confidence = 0.8
     
-    session.save()
-    
-    # Generate response
+    # Generate response before saving to validate character limit
     responses = {
         'greeting': "Welcome! Let's book your table.",
         'party_size': "How many guests? (1-20)",
@@ -98,14 +116,23 @@ def handle_input(request, session_id):
         'time': "What time? (HH:MM, 11AM-10PM)",
         'name': "Your name?",
         'phone': "Your phone number?",
-        'confirmation': f"Confirm: {session.party_size} on {session.date} at {session.time}? (Yes/No)",
+        'confirmation': f"Confirm: {session.party_size} on {session.date} at {session.time}, {session.name}, {session.phone}? (Yes/No)",
         'completed': "Reservation confirmed! See you soon."
     }
     
     base = responses.get(session.current_step, "Please continue.")
     if session.confidence < 0.7:
         base += " [?] Sure?"
-    agent_response = base[:120]
+    
+    # Validate character limit - if exceeds 120, rollback state transition
+    if len(base) > 120:
+        session.current_step = previous_step
+        session.confidence = 0.3
+        agent_response = "Response too long. Please try again."[:120]
+    else:
+        agent_response = base[:120]
+    
+    session.save()
     
     serializer = ReservationSessionSerializer(session)
     return Response({

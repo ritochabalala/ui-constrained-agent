@@ -6,7 +6,8 @@ import ReservationForm from './components/ReservationForm';
 function App() {
   const [sessionId, setSessionId] = useState(null);
   const [sessionData, setSessionData] = useState(null);
-  const [agentResponse, setAgentResponse] = useState("Welcome! Let's book your table.");
+  // const [agentResponse, setAgentResponse] = useState("Welcome! Let's book your table.");
+  const [agentResponse, setAgentResponse] = useState("What's your seating preference? e.g Window Seat, Bar, Patio, Quiet, High-top, No Preference");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -14,8 +15,11 @@ function App() {
     fetch('/api/session/start/', { method: 'POST' })
       .then(res => res.json())
       .then(data => {
-        setSessionId(data.id);
-        setSessionData(data);
+        setSessionId(data.session?.id || data.id);
+        setSessionData(data.session || data);
+        if (data.agent_response) {
+          setAgentResponse(data.agent_response);
+        }
         setIsLoading(false);
       })
       .catch(error => {
@@ -97,16 +101,31 @@ function App() {
       }}>
         {['Start', 'Guests', 'Date', 'Time', 'Name', 'Contact', 'Confirm', 'Done'].map((label, index) => {
           const stepIndex = index + 1;
-          const isCurrent = sessionData?.current_step ===
-            (stepIndex === 1 ? 'party_size' :
-              stepIndex === 2 ? 'date' :
-                stepIndex === 3 ? 'time' :
-                  stepIndex === 4 ? 'name' :
-                    stepIndex === 5 ? 'phone' :
-                      stepIndex === 6 ? 'confirmation' :
-                        stepIndex === 7 ? 'completed' : null);
+          const stepName = stepIndex === 1 ? 'greeting' :
+            stepIndex === 2 ? 'party_size' :
+              stepIndex === 3 ? 'date' :
+                stepIndex === 4 ? 'time' :
+                  stepIndex === 5 ? 'name' :
+                    stepIndex === 6 ? 'phone' :
+                      stepIndex === 7 ? 'confirmation' :
+                        stepIndex === 8 ? 'completed' : null;
 
-          const isCompleted = sessionData?.progress_percentage >= (stepIndex * 12.5); // Rough estimate
+          const isCurrent = sessionData?.current_step === stepName;
+
+          // Determine step order for completion check
+          const stepOrder = {
+            'greeting': 1,
+            'party_size': 2,
+            'date': 3,
+            'time': 4,
+            'name': 5,
+            'phone': 6,
+            'confirmation': 7,
+            'completed': 8
+          };
+          const currentStepOrder = stepOrder[sessionData?.current_step] || 1;
+          const thisStepOrder = stepOrder[stepName] || 1;
+          const isCompleted = thisStepOrder < currentStepOrder;
 
           return (
             <div key={label} style={{
